@@ -41,6 +41,13 @@ body {
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
+section:hover {
+    background-color: #fcfcfc;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+    border-color: #3498db; 
+    transform: translateY(-2px); 
+}
+
 /* Titres des sections */
 h2 {
     color: #3498db; /* Bleu professionnel */
