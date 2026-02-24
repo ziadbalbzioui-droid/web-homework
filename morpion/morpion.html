@@ -1,0 +1,31 @@
+<html >
+<head>
+    <meta charset="UTF-8">
+    <title>Morpion</title>
+    <link rel="stylesheet" href="morpion.css">
+</head>
+<body>
+
+    <div class="game-container">
+        <h1>Morpion</h1>
+        
+        <div class="status">C'est au tour de <span>X</span></div>
+
+        <div class="board">
+            <div class="cell" data-index="0" onclick="clickCell(this)"></div>
+            <div class="cell" data-index="1" onclick="clickCell(this)"></div>
+            <div class="cell" data-index="2" onclick="clickCell(this)"></div>
+            <div class="cell" data-index="3" onclick="clickCell(this)"></div>
+            <div class="cell" data-index="4" onclick="clickCell(this)"></div>
+            <div class="cell" data-index="5" onclick="clickCell(this)"></div>
+            <div class="cell" data-index="6" onclick="clickCell(this)"></div>
+            <div class="cell" data-index="7" onclick="clickCell(this)"></div>
+            <div class="cell" data-index="8" onclick="clickCell(this)"></div>
+        </div>
+
+        <button id="reset">Réinitialiser</button>
+    </div>
+    <script src="morpion.js"></script>
+</body>
+
+</html>
