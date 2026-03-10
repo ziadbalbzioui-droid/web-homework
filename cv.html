@@ -1,68 +1,124 @@
-<html>
-    <head>
-        <meta charset="UTF-8" >
-        <title>Curriculum Vitae de Ziad </title>
-        <link rel="stylesheet" href="cv_css.css">
-    </head>
-    <body >
-        <section class = "header">
-            <h1>Ziad Balbzioui</h1>
-            <p>Adresse:   270 rue de la Paix, 75000 Paris</p>
-            <p>Téléphone: 06 12 34 56 78</p>
-            <p>Email: ziad.balbzioui@etu.minesparis.psl.eu</p>
-
-        </section>
-        <section class = "experience">
-            <h2>Expérience Professionnelle</h2>
-            <ul>
-                <li>Stage chez Apple - Développeur Web (2023)</li>
-                <li>Stage chez Google - Analyste de données (2022)</li>
-                <li>Stage chez Microsoft (2021)</li>
-            </ul>
-        </section>
-        <section class = "education">
-            <h2>Formation</h2>
-            <ul>
-                <li>Mines Paris (2025)</li >
-                <li>Lycée Kleber (2023)</li>
-            </ul>
-        </section>
-        <section class = "skills">
-            <h2>Compétences</h2>
-            <ul>
-                <li>Langages de programmation: Python, JavaScript, HTML/CSS</li>
-                <li>Frameworks: React, Django</li>
-                <li>Outils: Git, Docker</li>
-            </ul>
-        </section>
-        <section class = "projects">
-            <h2>Projets</h2>
-            <p>Projet de développement d'une application de gestion de tâches en React.</p>
-            <p>MIG prospectus</p>
-        </section>
-        
-        <section class="languages">
-            <h2>Langues</h2>
-            <div class="lang-container">
-                <div class="lang-item">
-                    <span>Français : Parfait</span>
-                    <div class="progress-bg">
-                        <div class="progress-bar" style="width: 100%;"></div>
-                    </div>
-                </div>
-                <div class="lang-item">
-                    <span>Anglais : Moyen / Avancé</span>
-                    <div class="progress-bg">
-                        <div class="progress-bar" style="width: 75%;"></div>
-                    </div>
-                </div>
-                <div class="lang-item">
-                    <span>Espagnol : Faible</span>
-                    <div class="progress-bg">
-                        <div class="progress-bar" style="width: 25%;"></div>
-                    </div>
-                </div>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CV - Ziad Balbzioui</title>
+    <link rel="stylesheet" href="cv_css.css">
+</head>
+<body>
+    <div class="cv-container">
+        <header class="header">
+            <div class="photo-container">
+                <img src="CV.jpg" alt="Photo de Ziad Balbzioui">
             </div>
-        </section>
-    </body>
+            <div class="header-text">
+                <h1>ZIAD BALBZIOUI</h1>
+                <h2>ÉLÈVE MINES PARIS</h2>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <aside class="sidebar">
+                <section>
+                    <h3>COORDONNÉES</h3>
+                    <ul class="contact-info">
+                        <li><i class="fas fa-map-marker-alt"></i> 3 rue saint-Odile, 67201, Strasbourg</li>
+                        <li><i class="fas fa-phone"></i> 0775952660</li>
+                        <li><i class="fas fa-paper-plane"></i> ziad.balbzioui@etu.minesparis.psl.eu</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h3>CENTRES D'INTÉRÊT</h3>
+                    <ul>
+                        <li>Pratique de l'escalade depuis 6 ans</li>
+                        <li>Course (semi-marathon)</li>
+                        <li>Violon (7 ans au Conservatoire de Strasbourg)</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h3>LANGUES</h3>
+                    <div class="language-item">
+                        <span>Français</span>
+                        <div class="progress-bar"><div class="progress" style="width: 100%;"></div></div>
+                        <span class="level">Langue maternelle</span>
+                    </div>
+                    <div class="language-item">
+                        <span>Anglais</span>
+                        <div class="progress-bar"><div class="progress" style="width: 75%;"></div></div>
+                        <span class="level">Opérationnel</span>
+                    </div>
+                </section>
+
+                <section>
+                    <h3>COMPÉTENCES</h3>
+                    <ul>
+                        <li>Autonomie</li>
+                        <li>Relation client</li>
+                        <li>Sens des responsabilités</li>
+                    </ul>
+                </section>
+            </aside>
+
+            <main class="content">
+                <section>
+                    <h3>PROFIL</h3>
+                    <p>Étudiant aux Mines de Paris, doté d'un solide esprit analytique et d'une grande rigueur scientifique, je m'intéresse aux technologies de rupture comme l'intelligence artificielle et la blockchain. Curieux, persévérant et orienté solutions, je souhaite contribuer à des projets innovants à fort impact technologique.</p>
+                </section>
+
+                <section>
+                    <h3>EXPÉRIENCE</h3>
+                    <div class="exp-item">
+                        <div class="exp-header">
+                            <strong>Cours particuliers</strong>, 09/2025 - Actuel
+                            <span>Paris</span>
+                        </div>
+                        <p>- Cours particulier à un élève de terminale et un élève niveau MP</p>
+                    </div>
+
+                    <div class="exp-item">
+                        <div class="exp-header">
+                            <strong>Prospecteur</strong>, 07/2023 - 08/2023
+                            <span>Beausite Immobilier - Strasbourg</span>
+                        </div>
+                        <ul>
+                            <li>Distribution de prospectus afin de trouver des nouveaux clients</li>
+                            <li>Accompagnement d'agents immobiliers</li>
+                        </ul>
+                    </div>
+
+                    <div class="exp-item">
+                        <div class="exp-header">
+                            <strong>Vendeur</strong>, 11/2019 - 12/2019
+                            <span>Librairie Kleber - Strasbourg</span>
+                        </div>
+                        <ul>
+                            <li>Accueil des clients, réponse à leurs demandes de renseignements avec efficacité et courtoisie.</li>
+                            <li>Rangement, entretien et réapprovisionnement de la boutique.</li>
+                            <li>Encaissement des achats et gestion des opérations de caisse.</li>
+                        </ul>
+                    </div>
+                </section>
+
+                <section>
+                    <h3>FORMATION</h3>
+                    <div class="formation-item">
+                        <strong>Diplôme d'ingénieur</strong>, 09/2025 - En cours
+                        <p>Mines Paris - Paris</p>
+                    </div>
+                    <div class="formation-item">
+                        <strong>Licence 1</strong>, 09/2023 - 07/2025
+                        <p>Lycée Kleber - Strasbourg</p>
+                    </div>
+                    <div class="formation-item">
+                        <strong>Baccalauréat</strong>, 09/2016 - 07/2023
+                        <p>Collège episcopal Saint-Etienne - Strasbourg - Très bien</p>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+</body>
 </html>
