@@ -4,11 +4,11 @@ function clickCell(cell){
     if (cell.textContent !== "" || document.querySelector(".status").textContent.includes("gagné")) {
         return; 
     }
-    const currentPlayer = document.querySelector(".status span").textContent;
-    cell.textContent = currentPlayer;
+    const currentPlayer = document.querySelector(".status span").textContent
+    cell.textContent = currentPlayer
 
     if (checkWin(currentPlayer)) {
-        document.querySelector(".status").textContent = `Le joueur ${currentPlayer} a gagné !`;
+        document.querySelector(".status").innerHTML = `<div class="status">Le Joueur <span>${currentPlayer}</span> a gagné</div>`;
     } else if (checkDraw()) {
         document.querySelector(".status").textContent = "Match nul !";
     } else {
@@ -50,10 +50,15 @@ function checkDraw() {
 
 }
 
-document.getElementById("reset").addEventListener("click", () => {
+function reset() {
     const cells = document.querySelectorAll(".cell");
-    cells.forEach(cell => cell.textContent = "");
-    document.querySelector(".status span").textContent = "X";
-    document.querySelector(".status").textContent = "C'est au tour de X";
-});
+    for (let cell of cells) {
+        cell.textContent = ""
+    }
+
+    document.querySelector('.status').innerHTML = "<div class = 'status' >C'est au tour de <span>X</span></div>";
+
+    
+}
+
 
