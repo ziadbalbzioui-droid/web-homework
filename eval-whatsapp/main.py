@@ -1,86 +1,90 @@
-"""
-WhatsApp-like chat application.
-FastAPI + WebSockets + SQLite
-"""
-
-import json
-import sqlite3
+from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
+import json
 
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import Depends
+from fastapi import FastAPI
+from fastapi import HTTPException
+from fastapi import Query
+from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
 
-app = FastAPI(title="WhatsApp Clone")
-
-
-# ---------------------------------------------------------------------------
-# Database
-# ---------------------------------------------------------------------------
-
-def get_db() -> sqlite3.Connection:
-    conn = sqlite3.connect("whatsapp.db")
-    conn.row_factory = sqlite3.Row
-    return conn
+from sqlmodel import Field
+from sqlmodel import Session
+from sqlmodel import SQLModel
+from sqlmodel import create_engine
+from sqlmodel import select
 
 
-def init_db() -> None:
-    conn = get_db()
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS users (
-            id   INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS rooms (
-            id   INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS subscriptions (
-            user_id INTEGER NOT NULL,
-            room_id INTEGER NOT NULL,
-            PRIMARY KEY (user_id, room_id),
-            FOREIGN KEY (user_id) REFERENCES users(id),
-            FOREIGN KEY (room_id) REFERENCES rooms(id)
-        );
-        CREATE TABLE IF NOT EXISTS messages (
-            id        INTEGER PRIMARY KEY AUTOINCREMENT,
-            room_id   INTEGER NOT NULL,
-            user_id   INTEGER NOT NULL,
-            content   TEXT NOT NULL,
-            timestamp TEXT NOT NULL,
-            FOREIGN KEY (room_id) REFERENCES rooms(id),
-            FOREIGN KEY (user_id) REFERENCES users(id)
-        );
-    """)
-    conn.commit()
-    conn.close()
+SQLITE_URL = "sqlite:///whatsapp.db"
+engine = create_engine(SQLITE_URL)
 
 
-init_db()
+# création des tables au démarrage de l'appli
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    SQLModel.metadata.create_all(engine)
+    yield
 
 
-# ---------------------------------------------------------------------------
-# WebSocket connection manager
-# ---------------------------------------------------------------------------
+app = FastAPI(lifespan=lifespan)
 
+
+# dépendance injectée dans chaque route pour obtenir une session
+def get_session():
+    with Session(engine) as session:
+        yield session
+
+
+SessionDep = Annotated[Session, Depends(get_session)]
+
+
+# schéma d'entrée (ce que le client envoie)
+class UserCreate(SQLModel):
+    name: str
+
+# modèle ORM correspondant à la table en base
+class User(UserCreate, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+
+class RoomCreate(SQLModel):
+    name: str
+
+class Room(RoomCreate, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+
+# table de liaison pour les abonnements utilisateur/salon
+class Subscription(SQLModel, table=True):
+    user_id: int = Field(foreign_key="user.id", primary_key=True)
+    room_id: int = Field(foreign_key="room.id", primary_key=True)
+
+
+class Message(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    room_id: int = Field(foreign_key="room.id")
+    user_id: int = Field(foreign_key="user.id")
+    content: str
+    timestamp: str
+
+
+# gestion des connexions WebSocket actives par salon
 class ConnectionManager:
-    """Tracks active WebSocket connections per room."""
-
     def __init__(self):
-        # room_name -> list of (WebSocket, user_name)
         self.active: dict[str, list[tuple]] = {}
 
-    async def connect(self, ws: WebSocket, room: str, user: str) -> None:
+    async def connect(self, ws: WebSocket, room: str, user: str):
         await ws.accept()
         self.active.setdefault(room, []).append((ws, user))
 
-    def disconnect(self, ws: WebSocket, room: str) -> None:
+    def disconnect(self, ws: WebSocket, room: str):
         if room in self.active:
             self.active[room] = [(w, u) for w, u in self.active[room] if w != ws]
 
-    async def broadcast(self, room: str, data: dict) -> None:
+    async def broadcast(self, room: str, data: dict):
         for ws, _ in self.active.get(room, []):
             try:
                 await ws.send_json(data)
@@ -91,188 +95,129 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-# ---------------------------------------------------------------------------
-# Pydantic schemas
-# ---------------------------------------------------------------------------
-
-class NameIn(BaseModel):
-    name: str
-
-
-# ---------------------------------------------------------------------------
-# Users
-# ---------------------------------------------------------------------------
-
 @app.post("/users", status_code=201)
-def create_user(body: NameIn):
-    """Create a new user (called from the CLI)."""
-    conn = get_db()
-    try:
-        conn.execute("INSERT INTO users (name) VALUES (?)", (body.name,))
-        conn.commit()
-        row = conn.execute("SELECT * FROM users WHERE name=?", (body.name,)).fetchone()
-        return dict(row)
-    except sqlite3.IntegrityError:
+def create_user(body: UserCreate, session: SessionDep) -> User:
+    if session.exec(select(User).where(User.name == body.name)).first():
         raise HTTPException(400, "User already exists")
-    finally:
-        conn.close()
+    user = User.model_validate(body)
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
 
 
 @app.get("/users")
-def list_users():
-    """Return all users sorted by name."""
-    conn = get_db()
-    rows = conn.execute("SELECT * FROM users ORDER BY name").fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+def list_users(session: SessionDep) -> list[User]:
+    return session.exec(select(User).order_by(User.name)).all()
 
 
-# ---------------------------------------------------------------------------
-# Rooms
-# ---------------------------------------------------------------------------
-
-def _create_room(name: str) -> dict:
-    conn = get_db()
-    try:
-        conn.execute("INSERT INTO rooms (name) VALUES (?)", (name,))
-        conn.commit()
-        row = conn.execute("SELECT * FROM rooms WHERE name=?", (name,)).fetchone()
-        return dict(row)
-    except sqlite3.IntegrityError:
+def _create_room(body: RoomCreate, session: Session) -> Room:
+    if session.exec(select(Room).where(Room.name == body.name)).first():
         raise HTTPException(400, "Room already exists")
-    finally:
-        conn.close()
+    room = Room.model_validate(body)
+    session.add(room)
+    session.commit()
+    session.refresh(room)
+    return room
 
 
 @app.post("/rooms", status_code=201)
-def create_room_body(body: NameIn):
-    """Create a room via JSON body: http POST /rooms name=social"""
-    return _create_room(body.name)
+def create_room_body(body: RoomCreate, session: SessionDep) -> Room:
+    return _create_room(body, session)
 
 
 @app.post("/rooms/{name}", status_code=201)
-def create_room_path(name: str):
-    """Create a room via path: http POST /rooms/social"""
-    return _create_room(name)
+def create_room_path(name: str, session: SessionDep) -> Room:
+    return _create_room(RoomCreate(name=name), session)
 
 
 @app.get("/rooms")
-def list_rooms(user_name: Optional[str] = None):
-    """
-    List all rooms.
-    If user_name is given, each room includes a `subscribed` boolean.
-    """
-    conn = get_db()
-    if user_name:
-        user = conn.execute("SELECT id FROM users WHERE name=?", (user_name,)).fetchone()
-        if not user:
-            conn.close()
-            raise HTTPException(404, "User not found")
-        rows = conn.execute("""
-            SELECT r.id, r.name,
-                   CASE WHEN s.user_id IS NOT NULL THEN 1 ELSE 0 END AS subscribed
-            FROM rooms r
-            LEFT JOIN subscriptions s ON r.id = s.room_id AND s.user_id = ?
-            ORDER BY r.name
-        """, (user["id"],)).fetchall()
-    else:
-        rows = conn.execute(
-            "SELECT id, name, 0 AS subscribed FROM rooms ORDER BY name"
-        ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+def list_rooms(session: SessionDep, user_name: Optional[str] = None):
+    rooms = session.exec(select(Room).order_by(Room.name)).all()
 
+    if not user_name:
+        return [{"id": r.id, "name": r.name, "subscribed": False} for r in rooms]
 
-# ---------------------------------------------------------------------------
-# Subscriptions
-# ---------------------------------------------------------------------------
+    user = session.exec(select(User).where(User.name == user_name)).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    # on récupère les ids des salons auxquels l'utilisateur est abonné
+    subs = session.exec(select(Subscription).where(Subscription.user_id == user.id)).all()
+    sub_ids = {s.room_id for s in subs}
+
+    return [{"id": r.id, "name": r.name, "subscribed": r.id in sub_ids} for r in rooms]
+
 
 @app.post("/rooms/{room_name}/subscribe")
-def subscribe(room_name: str, body: NameIn):
-    """Subscribe a user to a room."""
-    conn = get_db()
-    room = conn.execute("SELECT id FROM rooms WHERE name=?", (room_name,)).fetchone()
-    user = conn.execute("SELECT id FROM users WHERE name=?", (body.name,)).fetchone()
+def subscribe(room_name: str, body: UserCreate, session: SessionDep):
+    room = session.exec(select(Room).where(Room.name == room_name)).first()
+    user = session.exec(select(User).where(User.name == body.name)).first()
     if not room or not user:
-        conn.close()
         raise HTTPException(404, "Room or user not found")
-    try:
-        conn.execute("INSERT INTO subscriptions VALUES (?, ?)", (user["id"], room["id"]))
-        conn.commit()
-        return {"status": "subscribed"}
-    except sqlite3.IntegrityError:
+
+    already = session.exec(
+        select(Subscription).where(Subscription.user_id == user.id, Subscription.room_id == room.id)
+    ).first()
+    if already:
         return {"status": "already_subscribed"}
-    finally:
-        conn.close()
+
+    session.add(Subscription(user_id=user.id, room_id=room.id))
+    session.commit()
+    return {"status": "subscribed"}
 
 
 @app.post("/rooms/{room_name}/unsubscribe")
-def unsubscribe(room_name: str, body: NameIn):
-    """Unsubscribe a user from a room."""
-    conn = get_db()
-    room = conn.execute("SELECT id FROM rooms WHERE name=?", (room_name,)).fetchone()
-    user = conn.execute("SELECT id FROM users WHERE name=?", (body.name,)).fetchone()
+def unsubscribe(room_name: str, body: UserCreate, session: SessionDep):
+    room = session.exec(select(Room).where(Room.name == room_name)).first()
+    user = session.exec(select(User).where(User.name == body.name)).first()
     if not room or not user:
-        conn.close()
         raise HTTPException(404, "Room or user not found")
-    conn.execute(
-        "DELETE FROM subscriptions WHERE user_id=? AND room_id=?",
-        (user["id"], room["id"])
-    )
-    conn.commit()
-    conn.close()
+
+    sub = session.exec(
+        select(Subscription).where(Subscription.user_id == user.id, Subscription.room_id == room.id)
+    ).first()
+    if sub:
+        session.delete(sub)
+        session.commit()
     return {"status": "unsubscribed"}
 
 
-# ---------------------------------------------------------------------------
-# Messages (history)
-# ---------------------------------------------------------------------------
-
 @app.get("/rooms/{room_name}/messages")
-def get_messages(room_name: str):
-    """Return the full message history for a room."""
-    conn = get_db()
-    room = conn.execute("SELECT id FROM rooms WHERE name=?", (room_name,)).fetchone()
+def get_messages(room_name: str, session: SessionDep):
+    room = session.exec(select(Room).where(Room.name == room_name)).first()
     if not room:
-        conn.close()
         raise HTTPException(404, "Room not found")
-    rows = conn.execute("""
-        SELECT m.id, m.content, m.timestamp, u.name AS user_name
-        FROM messages m
-        JOIN users u ON m.user_id = u.id
-        WHERE m.room_id = ?
-        ORDER BY m.timestamp
-    """, (room["id"],)).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
 
+    messages = session.exec(
+        select(Message).where(Message.room_id == room.id).order_by(Message.timestamp)
+    ).all()
 
-# ---------------------------------------------------------------------------
-# WebSocket — real-time chat
-# ---------------------------------------------------------------------------
+    # on joint manuellement avec User pour récupérer le nom de l'auteur
+    result = []
+    for msg in messages:
+        user = session.get(User, msg.user_id)
+        result.append({
+            "id": msg.id,
+            "content": msg.content,
+            "timestamp": msg.timestamp,
+            "user_name": user.name if user else "inconnu",
+        })
+    return result
+
 
 @app.websocket("/ws/{room_name}")
-async def chat(
-    websocket: WebSocket,
-    room_name: str,
-    user_name: str = Query(...),
-):
-    """
-    WebSocket endpoint for a room.
-    Connect with: ws://host/ws/<room>?user_name=<name>
-    Send JSON: {"content": "hello"}
-    Receive JSON: {"type": "message"|"system", "user": ..., "content": ..., "timestamp": ...}
-    """
-    conn = get_db()
-    room = conn.execute("SELECT id FROM rooms WHERE name=?", (room_name,)).fetchone()
-    user = conn.execute("SELECT id FROM users WHERE name=?", (user_name,)).fetchone()
-    conn.close()
+async def chat(websocket: WebSocket, room_name: str, user_name: str = Query(...)):
+    # on vérifie que le salon et l'utilisateur existent avant d'accepter la connexion
+    with Session(engine) as session:
+        room = session.exec(select(Room).where(Room.name == room_name)).first()
+        user = session.exec(select(User).where(User.name == user_name)).first()
 
     if not room or not user:
-        await websocket.close(code=1008)  # Policy violation
+        await websocket.close(code=1008)
         return
 
-    room_id, user_id = room["id"], user["id"]
+    room_id, user_id = room.id, user.id
     await manager.connect(websocket, room_name, user_name)
     await manager.broadcast(room_name, {
         "type": "system",
@@ -288,14 +233,9 @@ async def chat(
                 continue
 
             ts = datetime.now().isoformat()
-
-            conn = get_db()
-            conn.execute(
-                "INSERT INTO messages (room_id, user_id, content, timestamp) VALUES (?, ?, ?, ?)",
-                (room_id, user_id, content, ts),
-            )
-            conn.commit()
-            conn.close()
+            with Session(engine) as session:
+                session.add(Message(room_id=room_id, user_id=user_id, content=content, timestamp=ts))
+                session.commit()
 
             await manager.broadcast(room_name, {
                 "type": "message",
@@ -312,10 +252,6 @@ async def chat(
             "timestamp": datetime.now().isoformat(),
         })
 
-
-# ---------------------------------------------------------------------------
-# Static frontend
-# ---------------------------------------------------------------------------
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
